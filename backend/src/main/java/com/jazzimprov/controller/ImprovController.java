@@ -69,9 +69,12 @@ public class ImprovController {
         double randomness = Math.max(0.0, Math.min(1.0, request.getRandomness()));
         String rhythmMode = request.getRhythmMode() != null ? request.getRhythmMode() : "swing";
         int maxNotes = request.getMaxNotes() > 0 ? request.getMaxNotes() : MusicConfig.DEFAULT_MAX_NOTES;
+        int tempo = request.getTempo() > 0 ? request.getTempo() : MusicConfig.DEFAULT_TEMPO;
 
         // Generate nada untuk setiap chord dalam progression
         List<String> allNotes = new ArrayList<>();
+        // Chord yang aktif untuk tiap nada (sejajar dengan allNotes) — dipakai untuk iringan akor
+        List<String> chordSequence = new ArrayList<>();
         int notesPerChord = maxNotes / chords.size();
         DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> lastGraph = null;
 
@@ -91,7 +94,7 @@ public class ImprovController {
                 : notesPerChord;
 
             // Tentukan nada awal (root chord tone)
-            List<String> chordTones = MusicConfig.CHORD_TONES.get(chordName);
+            List<String> chordTones = MusicConfig.getChordTones(chordName);
             String startNote = chordTones.get(0);
 
             // Jalankan traversal
@@ -103,6 +106,10 @@ public class ImprovController {
             }
 
             allNotes.addAll(notes);
+            // Tandai setiap nada ini dengan chord yang sedang berbunyi
+            for (int n = 0; n < notes.size(); n++) {
+                chordSequence.add(chordName);
+            }
         }
 
         // Assign durasi
@@ -125,7 +132,8 @@ public class ImprovController {
         ImprovResponse response = new ImprovResponse();
         response.setNotes(allNotes);
         response.setDurations(durations);
-        response.setTempoBpm(MusicConfig.DEFAULT_TEMPO);
+        response.setChordSequence(chordSequence);
+        response.setTempoBpm(tempo);
         response.setAlgorithm(algorithm.toUpperCase());
         response.setRhythmMode(rhythmMode);
         response.setStats(stats);
@@ -145,24 +153,10 @@ public class ImprovController {
     public ResponseEntity<Map<String, Object>> getAvailableChords() {
         Map<String, Object> result = new LinkedHashMap<>();
 
-        List<String> minor7 = new ArrayList<>();
-        List<String> dominant7 = new ArrayList<>();
-        List<String> major7 = new ArrayList<>();
-
-        for (String chord : MusicConfig.CHORD_SCALES.keySet()) {
-            if (chord.endsWith("m7")) minor7.add(chord);
-            else if (chord.endsWith("maj7")) major7.add(chord);
-            else if (chord.endsWith("7")) dominant7.add(chord);
-        }
-
-        Collections.sort(minor7);
-        Collections.sort(dominant7);
-        Collections.sort(major7);
-
-        result.put("minor7", minor7);
-        result.put("dominant7", dominant7);
-        result.put("major7", major7);
-        result.put("roots", List.of("C", "D", "E", "F", "G", "A", "B"));
+        // Semua 12 root kromatik dan tipe chord yang didukung generator.
+        result.put("roots", List.of(
+            "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"));
+        result.put("types", List.of("maj7", "7", "m7", "m7b5", "dim7", "6", "m6"));
 
         return ResponseEntity.ok(result);
     }
