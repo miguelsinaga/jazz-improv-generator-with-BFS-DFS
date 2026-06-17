@@ -6,10 +6,23 @@
  * agar display timeline & iringan akor bekerja untuk chord apa pun.
  */
 
+/**
+ * URL backend produksi (di-host di Render).
+ * GANTI nilai ini dengan URL service Render kamu setelah backend ter-deploy,
+ * misal: 'https://jazz-improv-backend.onrender.com'
+ */
+const BACKEND_BASE_URL = 'https://jazz-improv-backend.onrender.com';
+
 const Config = {
 
-  /** URL backend API */
-  API_BASE: 'http://localhost:8080/api',
+  /**
+   * URL backend API — otomatis: lokal saat development, Render saat online.
+   */
+  get API_BASE() {
+    const host = window.location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '';
+    return (isLocal ? 'http://localhost:8080' : BACKEND_BASE_URL) + '/api';
+  },
 
   /** Tempo default (BPM) */
   TEMPO_BPM: 120,
