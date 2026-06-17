@@ -78,13 +78,13 @@
   <main class="main-content flex-1 ml-64 p-6 md:p-margin-desktop bg-background min-h-screen pb-32">
 
     <!-- Header -->
-    <header class="flex justify-between items-center mb-10">
-      <div class="flex items-center gap-4">
-        <div class="w-12 h-12 bg-surface-charcoal border border-outline-variant flex items-center justify-center rounded-lg">
+    <header class="flex justify-between items-center mb-6 sm:mb-10">
+      <div class="flex items-center gap-3 sm:gap-4">
+        <div class="w-11 h-11 sm:w-12 sm:h-12 bg-surface-charcoal border border-outline-variant flex items-center justify-center rounded-lg shrink-0">
           <span class="material-symbols-outlined text-electric-blue" style="font-variation-settings:'FILL' 1;">piano</span>
         </div>
         <div>
-          <h2 class="text-headline-md font-headline-md text-on-surface">Algorithmic Composer</h2>
+          <h2 class="text-xl sm:text-headline-md font-headline-md text-on-surface">Algorithmic Composer</h2>
           <div class="flex items-center gap-2 text-label-caps font-label-caps text-on-surface-variant text-[10px]">
             <span id="statusDot" class="w-2 h-2 rounded-full bg-status-success animate-pulse"></span>
             <span id="statusText">ENGINE READY</span>
@@ -105,8 +105,8 @@
       </section>
 
       <!-- Configuration Panel -->
-      <section class="col-span-12 lg:col-span-8 bg-surface-container-high border border-outline-variant p-6 rounded-2xl shadow-lg">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-8">
+      <section class="col-span-12 lg:col-span-8 bg-surface-container-high border border-outline-variant p-4 sm:p-6 rounded-2xl shadow-lg">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
           <!-- Algorithm Toggle -->
           <div>
             <h4 class="text-label-caps font-label-caps mb-4 text-on-surface-variant">ALGORITHM</h4>
@@ -165,17 +165,17 @@
 
       <!-- Generate + Visualizer -->
       <section class="col-span-12">
-        <div class="flex flex-col items-center gap-8 py-10 bg-surface-container-lowest border border-outline-variant rounded-2xl relative overflow-hidden">
+        <div class="flex flex-col items-center gap-6 sm:gap-8 py-6 sm:py-10 px-3 bg-surface-container-lowest border border-outline-variant rounded-2xl relative overflow-hidden">
           <!-- Generate Button -->
-          <button id="generateBtn" onclick="App.handleGenerate()" class="relative group z-10">
+          <button id="generateBtn" onclick="App.handleGenerate()" class="relative group z-10 max-w-full">
             <div class="absolute -inset-1 bg-gradient-to-r from-electric-blue to-metallic-gold rounded-full blur opacity-40 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-            <div class="relative px-12 py-5 bg-background border border-outline-variant rounded-full flex items-center gap-4 hover:border-electric-blue transition-colors group-active:scale-95 duration-150">
-              <span id="generateIcon" class="material-symbols-outlined text-electric-blue text-3xl">auto_fix_high</span>
-              <span id="generateText" class="text-headline-sm font-headline-md text-on-surface tracking-wide">Generate Improvisation</span>
+            <div class="relative px-6 py-4 sm:px-12 sm:py-5 bg-background border border-outline-variant rounded-full flex items-center justify-center gap-3 sm:gap-4 hover:border-electric-blue transition-colors group-active:scale-95 duration-150">
+              <span id="generateIcon" class="material-symbols-outlined text-electric-blue text-2xl sm:text-3xl shrink-0">auto_fix_high</span>
+              <span id="generateText" class="text-base sm:text-headline-sm font-headline-md text-on-surface tracking-wide">Generate Improvisation</span>
             </div>
           </button>
           <!-- Timeline -->
-          <div class="w-full px-8 z-10">
+          <div class="w-full px-2 sm:px-8 z-10">
             <h4 class="text-label-caps font-label-caps text-center text-outline mb-6">LIVE COMPOSITION STREAM</h4>
             <div class="bg-surface-charcoal border border-outline-variant rounded-xl p-6 overflow-hidden h-48 relative">
               <div class="midi-grid"></div>
@@ -194,18 +194,18 @@
 </div>
 
 <!-- ======= PLAYER BAR ======= -->
-<div class="player-bar fixed bottom-0 left-64 right-0 h-24 bg-surface-container-low border-t border-outline-variant z-40 px-6 md:px-margin-desktop flex items-center gap-6 md:gap-12">
-  <div class="flex items-center gap-4 w-48">
-    <div class="w-10 h-10 bg-surface-charcoal border border-outline-variant rounded flex items-center justify-center">
+<div class="player-bar fixed bottom-0 left-64 right-0 h-24 bg-surface-container-low border-t border-outline-variant z-40 px-3 sm:px-6 md:px-margin-desktop flex items-center gap-3 sm:gap-6 md:gap-12">
+  <div class="hidden sm:flex items-center gap-4 w-40 md:w-48">
+    <div class="w-10 h-10 bg-surface-charcoal border border-outline-variant rounded flex items-center justify-center shrink-0">
       <span class="material-symbols-outlined text-electric-blue text-xl">audiotrack</span>
     </div>
-    <div>
+    <div class="min-w-0">
       <p id="trackName" class="text-body-sm font-bold truncate">No Track</p>
       <p id="trackTime" class="text-[10px] font-label-caps text-outline">00:00 / 00:00</p>
     </div>
   </div>
-  <div class="flex-1 flex flex-col items-center gap-2">
-    <div class="flex items-center gap-8">
+  <div class="flex-1 min-w-0 flex flex-col items-center gap-2">
+    <div class="flex items-center gap-4 sm:gap-8">
       <button onclick="App.handleShuffle()" class="player-btn" title="Regenerate"><span class="material-symbols-outlined">shuffle</span></button>
       <button onclick="App.skipToStart()" class="player-btn"><span class="material-symbols-outlined">skip_previous</span></button>
       <button id="playBtn" onclick="App.togglePlay()" class="w-12 h-12 bg-on-surface text-background rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
