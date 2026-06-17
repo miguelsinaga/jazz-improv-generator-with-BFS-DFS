@@ -43,36 +43,22 @@ const App = (() => {
   // ==========================================
 
   /**
-   * Kirim request ke backend untuk generate improvisasi.
+   * Generate improvisasi memakai mesin lokal (Engine) — berjalan di browser,
+   * tanpa backend. Logikanya identik dengan controller Java yang lama.
    *
-   * POST /api/generate
-   * Body: { chordProgression, algorithm, randomness, rhythmMode, maxNotes }
-   *
-   * @returns {Promise<Object>} Response berisi notes, durations, stats
+   * @returns {Promise<Object>} Response berisi notes, durations, chordSequence, stats
    */
   async function callGenerate() {
     const chordNames = state.chords.map(c => c.root + c.type);
 
-    const body = {
+    return Engine.generate({
       chordProgression: chordNames,
       algorithm: state.algorithm,
       randomness: state.randomness,
       rhythmMode: state.rhythmMode,
       tempo: state.tempo,
       maxNotes: 32,
-    };
-
-    const response = await fetch(`${Config.API_BASE}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
     });
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    return await response.json();
   }
 
   // ==========================================
@@ -122,7 +108,7 @@ const App = (() => {
       // Tampilkan pesan error di timeline
       const timeline = document.getElementById('noteTimeline');
       timeline.innerHTML = `<div class="flex items-center justify-center h-full w-full text-error text-body-sm font-label-caps">
-        Failed to connect to backend. Make sure Java server is running on port 8080.
+        Failed to generate: ${err.message}
       </div>`;
     }
 
