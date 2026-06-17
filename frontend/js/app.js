@@ -324,7 +324,7 @@ const App = (() => {
 
   function init() {
     renderChordUI();
-    console.log('Syncopate Pro initialized. Backend expected at', Config.API_BASE);
+    console.log('Syncopate Pro initialized — running fully client-side (Engine).');
   }
 
   // Run on load

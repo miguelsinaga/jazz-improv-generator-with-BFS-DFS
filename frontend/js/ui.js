@@ -205,6 +205,7 @@ const UI = (() => {
   function setStatus(status) {
     const dot = document.getElementById('statusDot');
     const text = document.getElementById('statusText');
+    if (!dot || !text) return; // indikator status dihilangkan dari UI
     switch (status) {
       case 'generating':
         dot.className = 'w-2 h-2 rounded-full bg-metallic-gold animate-pulse';
