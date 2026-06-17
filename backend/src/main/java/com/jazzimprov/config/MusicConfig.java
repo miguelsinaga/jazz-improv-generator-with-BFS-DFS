@@ -53,6 +53,28 @@ public final class MusicConfig {
         "m6",   new int[]{0, 2, 3, 5, 7, 9, 11}    // Melodic minor
     );
 
+    /**
+     * Interval (semitone dari root) untuk BEBOP SCALE tiap tipe chord.
+     *
+     * Bebop scale = chord-scale + satu nada kromatik passing, sehingga saat
+     * dimainkan sebagai delapan-delapan, chord tone jatuh tepat di ketukan.
+     * - 7    (Mixolydian + maj7)      → passing nat-7 antara b7 dan root
+     * - maj7/6 (Ionian + #5)          → passing #5 antara 5 dan 6
+     * - m7   (Dorian + maj3)          → passing nat-3 antara b3 dan 4
+     * - m6   (Melodic minor + #5)     → passing #5
+     * - m7b5 (Locrian + maj7)         → passing nat-7
+     * - dim7 (whole-half, sudah 8 nada)
+     */
+    private static final Map<String, int[]> BEBOP_SCALE_INTERVALS = Map.of(
+        "maj7", new int[]{0, 2, 4, 5, 7, 8, 9, 11},
+        "7",    new int[]{0, 2, 4, 5, 7, 9, 10, 11},
+        "m7",   new int[]{0, 2, 3, 4, 5, 7, 9, 10},
+        "m7b5", new int[]{0, 1, 3, 5, 6, 8, 10, 11},
+        "dim7", new int[]{0, 2, 3, 5, 6, 8, 9, 11},
+        "6",    new int[]{0, 2, 4, 5, 7, 8, 9, 11},
+        "m6",   new int[]{0, 2, 3, 5, 7, 8, 9, 11}
+    );
+
     /** Interval (semitone dari root) untuk CHORD TONE tiap tipe chord. */
     private static final Map<String, int[]> CHORD_TONE_INTERVALS = Map.of(
         "maj7", new int[]{0, 4, 7, 11},
@@ -124,6 +146,17 @@ public final class MusicConfig {
     /** Bobot: gerak kromatik biasa antar approach note (passing). */
     public static final double CHROMATIC_PASSING_WEIGHT = 0.5;
 
+    // ---- Bobot khusus bebop scale (gerak skala / scalar runs) ----
+
+    /** Bobot: nada skala resolve langkah-penuh (whole step) ke chord tone. */
+    public static final double SCALE_RESOLUTION_WEIGHT = 1.8;
+
+    /** Bobot: chord tone melangkah ke nada skala (memulai/menyambung run). */
+    public static final double SCALE_STEP_WEIGHT = 0.9;
+
+    /** Bobot: nada skala ke nada skala (membangun scalar run khas bebop). */
+    public static final double SCALE_RUN_WEIGHT = 1.2;
+
     /** Jumlah default nada yang dihasilkan. */
     public static final int DEFAULT_MAX_NOTES = 32;
 
@@ -186,6 +219,16 @@ public final class MusicConfig {
         String[] parsed = parseChord(chordName);
         if (parsed == null) return null;
         return notesFromIntervals(parsed[0], CHORD_TONE_INTERVALS.get(parsed[1]));
+    }
+
+    /**
+     * Bebop scale (8 nada: chord-scale + passing kromatik) untuk chord tertentu.
+     * @return list nada, atau null jika chord tidak valid.
+     */
+    public static List<String> getBebopScale(String chordName) {
+        String[] parsed = parseChord(chordName);
+        if (parsed == null) return null;
+        return notesFromIntervals(parsed[0], BEBOP_SCALE_INTERVALS.get(parsed[1]));
     }
 
     /**

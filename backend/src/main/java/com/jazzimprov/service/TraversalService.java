@@ -229,19 +229,21 @@ public class TraversalService {
         }
 
         if (!prevTone) {
-            // prev = nada kromatik → HARUS "ingin" resolve agar tetap in-context.
+            // prev = nada non-chord (skala/kromatik) → cenderung melangkah & resolve.
             int iv = MusicConfig.intervalSemitones(prev, cand);
-            if (candTone && iv == 1) {
-                mult *= 3.0;                         // resolve ke chord tone (dominan)
+            if (candTone && iv <= 2) {
+                mult *= 2.6;                         // mendarat di chord tone (resolve)
             } else if (!candTone && MusicConfig.isEnclosurePair(prev, cand, tones)) {
                 mult *= 2.0;                         // lanjut enclosure (atas↔bawah)
+            } else if (!candTone && iv <= 2) {
+                mult *= 1.3;                         // lanjut scalar run (melangkah)
             } else {
-                mult *= 0.25;                        // selain itu: tekan keras
+                mult *= 0.3;                         // lompatan dari non-chord: tekan
             }
         }
-        // prev = chord tone: tidak ada dorongan keluar. Greedy akan tetap pada
-        // chord tone; nada kromatik (enclosure) muncul lewat eksplorasi randomness
-        // lalu di-resolve greedy pada langkah berikutnya.
+        // prev = chord tone: tidak ada dorongan khusus. Greedy bisa arpeggio antar
+        // chord tone atau melangkah ke nada skala memulai run; nada kromatik
+        // (enclosure) muncul lewat eksplorasi randomness lalu di-resolve greedy.
 
         // Hindari bolak-balik A-B-A-B (kembali ke nada 2 langkah lalu).
         if (prev2 != null && cand.equals(prev2)) {

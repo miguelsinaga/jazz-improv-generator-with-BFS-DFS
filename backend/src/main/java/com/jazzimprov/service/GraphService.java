@@ -37,33 +37,40 @@ public class GraphService {
      * @return Graf berarah berbobot, atau null jika chord tidak valid
      */
     public DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> buildGraph(String chordName) {
-        // Node graf = chord tone + nada KROMATIK pengepung (approach/enclosure).
-        // Chord tone menjaga melodi tetap sesuai konteks chord, sementara nada
-        // kromatik memberi rasa bebop (enclosure) — dengan bobot yang membuat
-        // nada kromatik selalu cenderung resolve ke chord tone.
-        // Contoh Cmaj7: chord tone {C,E,G,B} + approach {C#,D#,F,F#,G#,A#,...}.
+        // Node graf terdiri dari tiga kelas nada:
+        //  - CHORD tone  : nada pembentuk chord (titik mendarat yang stabil).
+        //  - SCALE tone  : nada lain pada BEBOP SCALE (skala + passing kromatik)
+        //                  → bahan scalar run khas bebop, tetap in-context.
+        //  - APPROACH    : nada kromatik pengepung (enclosure) di luar skala.
+        // Contoh Cmaj7: chord {C,E,G,B} + scale {D,F,G#,A} + approach {C#,F#,A#}.
         List<String> chordTones = MusicConfig.getChordTones(chordName);
+        List<String> bebop = MusicConfig.getBebopScale(chordName);
         List<String> approaches = MusicConfig.getApproachNotes(chordName);
 
-        if (chordTones == null || chordTones.isEmpty()) {
+        if (chordTones == null || chordTones.isEmpty() || bebop == null) {
             return null;
         }
+
+        Set<String> chordSet = new LinkedHashSet<>(chordTones);
+        Set<String> scaleSet = new LinkedHashSet<>(bebop);
+        scaleSet.removeAll(chordSet); // SCALE = bebop scale di luar chord tone
+
+        // Kumpulan semua node (urut: chord → scale → approach, tanpa duplikat)
+        Set<String> allNotes = new LinkedHashSet<>(bebop);
+        allNotes.addAll(approaches);
 
         DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> graph =
             new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
 
-        List<String> allNotes = new ArrayList<>(chordTones);
-        allNotes.addAll(approaches);
         for (String note : allNotes) {
             graph.addVertex(note);
         }
 
-        // Buat edge berbobot untuk tiap pasang nada.
         for (String source : allNotes) {
             for (String target : allNotes) {
                 if (source.equals(target)) continue;
 
-                Double weight = edgeWeight(source, target, chordTones);
+                Double weight = edgeWeight(source, target, chordSet, scaleSet);
                 if (weight != null) {
                     DefaultWeightedEdge edge = graph.addEdge(source, target);
                     if (edge != null) {
@@ -78,44 +85,59 @@ public class GraphService {
 
     /**
      * Menghitung bobot transisi {@code source → target} berdasarkan teori
-     * melodik jazz (chromatic approach & enclosure).
+     * melodik bebop (scalar run, chromatic approach & enclosure).
      *
-     * Prioritas (bobot tinggi = lebih disukai):
-     * 1. approach → chord tone (resolve setengah langkah)  → RESOLUTION_WEIGHT
-     * 2. approach ↔ approach pengepung target sama (enclosure) → ENCLOSURE_WEIGHT
-     * 3. chord tone → approach (memulai enclosure, ½ langkah) → APPROACH_ENTRY_WEIGHT
-     * 4. approach → approach kromatik biasa (½ langkah)     → CHROMATIC_PASSING_WEIGHT
-     * 5. chord tone → chord tone                            → INTERVAL_WEIGHTS
+     * Aturan utama:
+     * - Nada NON-chord hanya bergerak melangkah (≤ 2 semitone) → garis tetap halus.
+     * - Mendarat di chord tone selalu kuat (resolve), terutama ½ langkah.
+     * - Antar chord tone boleh melompat (arpeggiation) sesuai bobot interval.
+     * - Nada skala saling sambung membentuk scalar run; nada kromatik approach
+     *   resolve/enclosure seperti sebelumnya.
      *
      * @return bobot, atau null bila transisi tidak diberi edge.
      */
-    private Double edgeWeight(String source, String target, List<String> chordTones) {
-        boolean srcTone = chordTones.contains(source);
-        boolean tgtTone = chordTones.contains(target);
-        int interval = MusicConfig.intervalSemitones(source, target);
+    private Double edgeWeight(String source, String target,
+                              Set<String> chordSet, Set<String> scaleSet) {
+        int iv = MusicConfig.intervalSemitones(source, target);
+        boolean srcChord = chordSet.contains(source);
+        boolean tgtChord = chordSet.contains(target);
 
-        if (srcTone && tgtTone) {
-            // Gerak antar chord tone — pakai bobot interval melodik biasa.
-            return MusicConfig.INTERVAL_WEIGHTS.get(interval);
-        }
-
-        if (!srcTone && tgtTone) {
-            // Nada kromatik menuju chord tone: resolve ½ langkah = paling kuat.
-            if (interval == 1) return MusicConfig.RESOLUTION_WEIGHT;
-            return null; // hindari lompatan dari approach langsung ke chord tone jauh
-        }
-
-        if (srcTone && !tgtTone) {
-            // Chord tone melangkah keluar ke nada kromatik (½ langkah) → mulai enclosure.
-            if (interval == 1) return MusicConfig.APPROACH_ENTRY_WEIGHT;
+        // Nada non-chord (skala/approach) hanya boleh melangkah, tidak melompat.
+        if (!srcChord && iv > 2) {
             return null;
         }
 
-        // Keduanya approach note.
-        if (MusicConfig.isEnclosurePair(source, target, chordTones)) {
+        if (tgtChord) {
+            if (srcChord) {
+                return MusicConfig.INTERVAL_WEIGHTS.get(iv); // arpeggiation
+            }
+            // Non-chord resolve menuju chord tone.
+            if (iv == 1) return MusicConfig.RESOLUTION_WEIGHT;          // ½ langkah (terkuat)
+            if (iv == 2 && scaleSet.contains(source)) {
+                return MusicConfig.SCALE_RESOLUTION_WEIGHT;            // langkah penuh diatonis
+            }
+            return null;
+        }
+
+        // target = non-chord
+        if (srcChord) {
+            // Keluar dari chord tone secara melangkah (mulai run / enclosure).
+            if (iv == 1 || iv == 2) {
+                return scaleSet.contains(target)
+                    ? MusicConfig.SCALE_STEP_WEIGHT       // ke nada skala (in-context)
+                    : MusicConfig.APPROACH_ENTRY_WEIGHT;  // ke nada kromatik approach
+            }
+            return null;
+        }
+
+        // Non-chord → non-chord (lanjut run / enclosure / passing).
+        if (scaleSet.contains(target) && iv <= 2) {
+            return MusicConfig.SCALE_RUN_WEIGHT;          // scalar run khas bebop
+        }
+        if (MusicConfig.isEnclosurePair(source, target, chordSet)) {
             return MusicConfig.ENCLOSURE_WEIGHT;
         }
-        if (interval == 1) {
+        if (iv == 1) {
             return MusicConfig.CHROMATIC_PASSING_WEIGHT;
         }
         return null;
