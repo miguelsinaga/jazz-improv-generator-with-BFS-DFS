@@ -100,9 +100,9 @@ public class ImprovController {
             // Jalankan traversal
             List<String> notes;
             if ("DFS".equalsIgnoreCase(algorithm)) {
-                notes = traversalService.dfsImprovise(graph, startNote, count, randomness);
+                notes = traversalService.dfsImprovise(graph, startNote, count, randomness, chordName);
             } else {
-                notes = traversalService.bfsImprovise(graph, startNote, count, randomness);
+                notes = traversalService.bfsImprovise(graph, startNote, count, randomness, chordName);
             }
 
             allNotes.addAll(notes);

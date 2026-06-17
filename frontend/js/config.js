@@ -54,6 +54,9 @@ const Config = {
     'm6':   [0, 3, 7, 9],
   },
 
+  /** Normalisasi ejaan flat → sharp. */
+  FLAT_TO_SHARP: { 'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#' },
+
   /**
    * Hitung chord tone (nama nada) dari root + tipe chord.
    * @param {string} root - misal "C", "F#"
@@ -65,5 +68,29 @@ const Config = {
     const intervals = this.CHORD_TONE_INTERVALS[type] || [];
     if (rootIdx < 0) return [];
     return intervals.map(iv => this.CHROMATIC[(rootIdx + iv) % 12]);
+  },
+
+  /**
+   * Pecah nama chord ("Dm7", "C#maj7", "Bbm7b5") menjadi {root, type}.
+   */
+  parseChord(chordName) {
+    if (!chordName) return null;
+    let root, type;
+    if (chordName.length >= 2 && (chordName[1] === '#' || chordName[1] === 'b')) {
+      root = chordName.slice(0, 2);
+      type = chordName.slice(2);
+    } else {
+      root = chordName.slice(0, 1);
+      type = chordName.slice(1);
+    }
+    root = this.FLAT_TO_SHARP[root] || root;
+    if (this.CHROMATIC.indexOf(root) < 0) return null;
+    return { root, type };
+  },
+
+  /** Chord tone dari nama chord lengkap ("Cmaj7" → ["C","E","G","B"]). */
+  chordTones(chordName) {
+    const p = this.parseChord(chordName);
+    return p ? this.computeChordTones(p.root, p.type) : [];
   },
 };

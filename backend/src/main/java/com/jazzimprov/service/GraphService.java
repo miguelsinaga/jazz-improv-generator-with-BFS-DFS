@@ -37,38 +37,34 @@ public class GraphService {
      * @return Graf berarah berbobot, atau null jika chord tidak valid
      */
     public DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> buildGraph(String chordName) {
-        List<String> scale = MusicConfig.getScale(chordName);
+        // Node graf = chord tone + nada KROMATIK pengepung (approach/enclosure).
+        // Chord tone menjaga melodi tetap sesuai konteks chord, sementara nada
+        // kromatik memberi rasa bebop (enclosure) — dengan bobot yang membuat
+        // nada kromatik selalu cenderung resolve ke chord tone.
+        // Contoh Cmaj7: chord tone {C,E,G,B} + approach {C#,D#,F,F#,G#,A#,...}.
         List<String> chordTones = MusicConfig.getChordTones(chordName);
+        List<String> approaches = MusicConfig.getApproachNotes(chordName);
 
-        if (scale == null || chordTones == null) {
+        if (chordTones == null || chordTones.isEmpty()) {
             return null;
         }
 
         DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> graph =
             new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
 
-        // Tambahkan semua nada dalam skala sebagai node
-        for (String note : scale) {
+        List<String> allNotes = new ArrayList<>(chordTones);
+        allNotes.addAll(approaches);
+        for (String note : allNotes) {
             graph.addVertex(note);
         }
 
-        // Buat edge untuk setiap pasang nada dengan interval valid
-        for (int i = 0; i < scale.size(); i++) {
-            for (int j = 0; j < scale.size(); j++) {
-                if (i == j) continue;
+        // Buat edge berbobot untuk tiap pasang nada.
+        for (String source : allNotes) {
+            for (String target : allNotes) {
+                if (source.equals(target)) continue;
 
-                String source = scale.get(i);
-                String target = scale.get(j);
-                int interval = MusicConfig.intervalSemitones(source, target);
-
-                Double baseWeight = MusicConfig.INTERVAL_WEIGHTS.get(interval);
-                if (baseWeight != null) {
-                    // Berikan bonus jika nada target adalah chord tone
-                    double weight = baseWeight;
-                    if (chordTones.contains(target)) {
-                        weight *= MusicConfig.CHORD_TONE_BONUS;
-                    }
-
+                Double weight = edgeWeight(source, target, chordTones);
+                if (weight != null) {
                     DefaultWeightedEdge edge = graph.addEdge(source, target);
                     if (edge != null) {
                         graph.setEdgeWeight(edge, weight);
@@ -78,6 +74,51 @@ public class GraphService {
         }
 
         return graph;
+    }
+
+    /**
+     * Menghitung bobot transisi {@code source → target} berdasarkan teori
+     * melodik jazz (chromatic approach & enclosure).
+     *
+     * Prioritas (bobot tinggi = lebih disukai):
+     * 1. approach → chord tone (resolve setengah langkah)  → RESOLUTION_WEIGHT
+     * 2. approach ↔ approach pengepung target sama (enclosure) → ENCLOSURE_WEIGHT
+     * 3. chord tone → approach (memulai enclosure, ½ langkah) → APPROACH_ENTRY_WEIGHT
+     * 4. approach → approach kromatik biasa (½ langkah)     → CHROMATIC_PASSING_WEIGHT
+     * 5. chord tone → chord tone                            → INTERVAL_WEIGHTS
+     *
+     * @return bobot, atau null bila transisi tidak diberi edge.
+     */
+    private Double edgeWeight(String source, String target, List<String> chordTones) {
+        boolean srcTone = chordTones.contains(source);
+        boolean tgtTone = chordTones.contains(target);
+        int interval = MusicConfig.intervalSemitones(source, target);
+
+        if (srcTone && tgtTone) {
+            // Gerak antar chord tone — pakai bobot interval melodik biasa.
+            return MusicConfig.INTERVAL_WEIGHTS.get(interval);
+        }
+
+        if (!srcTone && tgtTone) {
+            // Nada kromatik menuju chord tone: resolve ½ langkah = paling kuat.
+            if (interval == 1) return MusicConfig.RESOLUTION_WEIGHT;
+            return null; // hindari lompatan dari approach langsung ke chord tone jauh
+        }
+
+        if (srcTone && !tgtTone) {
+            // Chord tone melangkah keluar ke nada kromatik (½ langkah) → mulai enclosure.
+            if (interval == 1) return MusicConfig.APPROACH_ENTRY_WEIGHT;
+            return null;
+        }
+
+        // Keduanya approach note.
+        if (MusicConfig.isEnclosurePair(source, target, chordTones)) {
+            return MusicConfig.ENCLOSURE_WEIGHT;
+        }
+        if (interval == 1) {
+            return MusicConfig.CHROMATIC_PASSING_WEIGHT;
+        }
+        return null;
     }
 
     /**

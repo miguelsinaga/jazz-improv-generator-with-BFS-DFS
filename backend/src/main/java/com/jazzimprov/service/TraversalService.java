@@ -1,5 +1,6 @@
 package com.jazzimprov.service;
 
+import com.jazzimprov.config.MusicConfig;
 import org.jgrapht.graph.DefaultDirectedWeightedGraph;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +59,10 @@ public class TraversalService {
             DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> graph,
             String startNote,
             int maxNotes,
-            double randomness) {
+            double randomness,
+            String chordName) {
+
+        Set<String> tones = new HashSet<>(MusicConfig.getChordTones(chordName));
 
         List<String> sequence = new ArrayList<>();
         Deque<String> stack = new ArrayDeque<>(); // Stack untuk DFS
@@ -76,8 +80,10 @@ public class TraversalService {
                 continue;
             }
 
-            // Pilih nada berikutnya secara weighted random
-            String next = weightedRandomChoice(neighbors, randomness);
+            // Pilih nada berikutnya: bobot graf disesuaikan konteks melodik
+            // (resolusi & penyelesaian enclosure) agar sequence paling cocok.
+            Map<String, Double> scored = applyContext(neighbors, sequence, tones);
+            String next = weightedRandomChoice(scored, randomness);
 
             if (next != null) {
                 // DFS: push ke stack (go deeper)
@@ -113,7 +119,10 @@ public class TraversalService {
             DefaultDirectedWeightedGraph<String, DefaultWeightedEdge> graph,
             String startNote,
             int maxNotes,
-            double randomness) {
+            double randomness,
+            String chordName) {
+
+        Set<String> tones = new HashSet<>(MusicConfig.getChordTones(chordName));
 
         List<String> sequence = new ArrayList<>();
         Queue<String> queue = new LinkedList<>(); // Queue untuk BFS
@@ -142,7 +151,9 @@ public class TraversalService {
 
                 if (available.isEmpty()) break;
 
-                String next = weightedRandomChoice(available, randomness);
+                // Sesuaikan bobot dengan konteks melodik sebelum memilih
+                Map<String, Double> scored = applyContext(available, sequence, tones);
+                String next = weightedRandomChoice(scored, randomness);
                 if (next != null) {
                     added.add(next);
                     sequence.add(next);
@@ -160,16 +171,102 @@ public class TraversalService {
     }
 
     /**
+     * Menyesuaikan bobot kandidat dengan KONTEKS melodik (1-2 nada terakhir).
+     *
+     * Bobot dasar dari graf hanya melihat "satu langkah". Di sini bobot tiap
+     * kandidat dikalikan multiplier kontekstual agar generator memilih
+     * note/sequence yang paling cocok pada saat itu — terutama untuk
+     * menyelesaikan enclosure dan me-resolve nada kromatik ke chord tone.
+     *
+     * @param neighbors kandidat nada berikut + bobot graf
+     * @param sequence  melodi yang sudah terbentuk (untuk melihat 2 nada terakhir)
+     * @param tones     himpunan chord tone chord ini
+     * @return map bobot yang sudah disesuaikan
+     */
+    private Map<String, Double> applyContext(
+            Map<String, Double> neighbors, List<String> sequence, Set<String> tones) {
+
+        String prev = sequence.isEmpty() ? null : sequence.get(sequence.size() - 1);
+        String prev2 = sequence.size() >= 2 ? sequence.get(sequence.size() - 2) : null;
+
+        Map<String, Double> adjusted = new LinkedHashMap<>();
+        for (Map.Entry<String, Double> entry : neighbors.entrySet()) {
+            String cand = entry.getKey();
+            double w = entry.getValue() * contextMultiplier(prev, prev2, cand, tones);
+            adjusted.put(cand, Math.max(w, 0.0001));
+        }
+        return adjusted;
+    }
+
+    /**
+     * Menghitung pengali bobot berdasarkan konteks melodik.
+     *
+     * Aturan (berbasis teori bebop enclosure):
+     * - Jika 2 nada terakhir adalah pasangan pengepung (atas & bawah) dari
+     *   chord tone, dan kandidat adalah chord tone target itu → SANGAT disukai
+     *   (menyelesaikan enclosure).
+     * - Jika nada terakhir adalah nada kromatik (approach):
+     *     • kandidat chord tone ½ langkah → disukai (resolve);
+     *     • kandidat approach yang mengepung target sama → disukai (lanjut enclosure);
+     *     • kandidat approach lain → ditekan (hindari kromatik melantur).
+     * - Jika nada terakhir chord tone & kandidat approach → sedikit didorong
+     *   (sesekali memulai enclosure).
+     */
+    private double contextMultiplier(String prev, String prev2, String cand, Set<String> tones) {
+        if (prev == null) return 1.0;
+
+        boolean candTone = tones.contains(cand);
+        boolean prevTone = tones.contains(prev);
+        double mult = 1.0;
+
+        // Penyelesaian enclosure penuh: prev2 & prev mengepung target, cand = target.
+        if (prev2 != null && !prevTone && !tones.contains(prev2)
+                && MusicConfig.isEnclosurePair(prev2, prev, tones)
+                && candTone
+                && MusicConfig.intervalSemitones(prev, cand) == 1
+                && MusicConfig.intervalSemitones(prev2, cand) == 1) {
+            mult *= 2.5;
+        }
+
+        if (!prevTone) {
+            // prev = nada kromatik → HARUS "ingin" resolve agar tetap in-context.
+            int iv = MusicConfig.intervalSemitones(prev, cand);
+            if (candTone && iv == 1) {
+                mult *= 3.0;                         // resolve ke chord tone (dominan)
+            } else if (!candTone && MusicConfig.isEnclosurePair(prev, cand, tones)) {
+                mult *= 2.0;                         // lanjut enclosure (atas↔bawah)
+            } else {
+                mult *= 0.25;                        // selain itu: tekan keras
+            }
+        }
+        // prev = chord tone: tidak ada dorongan keluar. Greedy akan tetap pada
+        // chord tone; nada kromatik (enclosure) muncul lewat eksplorasi randomness
+        // lalu di-resolve greedy pada langkah berikutnya.
+
+        // Hindari bolak-balik A-B-A-B (kembali ke nada 2 langkah lalu).
+        if (prev2 != null && cand.equals(prev2)) {
+            mult *= 0.5;
+        }
+
+        return mult;
+    }
+
+    /**
      * Memilih nada secara weighted random dari kandidat.
      *
      * Dengan probabilitas (1 - randomness), pilih berdasarkan bobot:
      * nada dengan bobot lebih tinggi lebih sering terpilih.
      *
-     * Dengan probabilitas randomness, pilih secara uniformly random:
-     * semua nada punya kesempatan yang sama.
+     * Strategi GREEDY:
+     * - Dengan probabilitas (1 - randomness): pilih kandidat dengan bobot
+     *   (sudah disesuaikan konteks) TERTINGGI — selalu mengambil nada yang
+     *   paling cocok dengan sequence saat itu. Inilah yang menjaga melodi
+     *   tetap "in context" (resolve & menyelesaikan enclosure).
+     * - Dengan probabilitas randomness: eksplorasi weighted-random untuk
+     *   variasi (dan sesekali memicu nada kromatik yang lalu di-resolve greedy).
      *
      * @param candidates Map dari nama nada ke bobot
-     * @param randomness tingkat keacakan (0.0 - 1.0)
+     * @param randomness tingkat keacakan (0.0 = greedy penuh, 1.0 = eksploratif)
      * @return nama nada yang terpilih, atau null jika candidates kosong
      */
     private String weightedRandomChoice(Map<String, Double> candidates, double randomness) {
@@ -177,22 +274,26 @@ public class TraversalService {
 
         List<Map.Entry<String, Double>> entries = new ArrayList<>(candidates.entrySet());
 
-        // Dengan probabilitas randomness, pilih secara acak total
+        // Eksplorasi: weighted-random (variasi) dengan probabilitas randomness.
         if (rng.nextDouble() < randomness) {
-            return entries.get(rng.nextInt(entries.size())).getKey();
+            double totalWeight = entries.stream().mapToDouble(Map.Entry::getValue).sum();
+            double r = rng.nextDouble() * totalWeight;
+            for (Map.Entry<String, Double> entry : entries) {
+                r -= entry.getValue();
+                if (r <= 0) {
+                    return entry.getKey();
+                }
+            }
+            return entries.get(entries.size() - 1).getKey();
         }
 
-        // Weighted random: nada dengan bobot lebih tinggi lebih sering dipilih
-        double totalWeight = entries.stream().mapToDouble(Map.Entry::getValue).sum();
-        double r = rng.nextDouble() * totalWeight;
-
+        // GREEDY: ambil bobot tertinggi (paling sesuai konteks sequence saat ini).
+        Map.Entry<String, Double> best = entries.get(0);
         for (Map.Entry<String, Double> entry : entries) {
-            r -= entry.getValue();
-            if (r <= 0) {
-                return entry.getKey();
+            if (entry.getValue() > best.getValue()) {
+                best = entry;
             }
         }
-
-        return entries.get(entries.size() - 1).getKey();
+        return best.getKey();
     }
 }

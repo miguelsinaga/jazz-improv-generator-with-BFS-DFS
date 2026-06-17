@@ -77,26 +77,28 @@ const Audio = (() => {
    * @param {number} dur       - durasi pad (detik)
    */
   function scheduleChordPad(chordName, startTime, dur) {
-    const tones = chordNameToTones(chordName);
+    const tones = Config.chordTones(chordName);
     if (!tones.length) return;
 
-    tones.forEach(noteName => {
+    tones.forEach((noteName, idx) => {
       const baseFreq = Config.NOTE_FREQ[noteName];
       if (!baseFreq) return;
-      const freq = baseFreq / 2; // oktaf lebih rendah agar tidak menutupi melodi
+      // Root & 3rd satu oktaf di bawah; tone lain tetap, agar akor terdengar
+      // penuh namun tidak menutupi melodi.
+      const freq = baseFreq / 2;
 
       const osc = audioCtx.createOscillator();
       const padGain = audioCtx.createGain();
       osc.connect(padGain);
       padGain.connect(masterGain);
 
-      osc.type = 'sine';
+      osc.type = 'triangle'; // sedikit lebih kaya agar akor jelas terdengar
       osc.frequency.setValueAtTime(freq, startTime);
 
-      // Pad lembut: attack & release panjang, level rendah agar jadi latar
-      const attack = Math.min(0.08, dur * 0.2);
-      const release = Math.min(0.15, dur * 0.3);
-      const level = 0.12 / tones.length; // bagi rata agar tidak clipping
+      // Pad: attack & release halus, level cukup terdengar sebagai iringan
+      const attack = Math.min(0.06, dur * 0.2);
+      const release = Math.min(0.12, dur * 0.3);
+      const level = 0.22 / Math.sqrt(tones.length); // cukup keras tapi tidak clipping
 
       padGain.gain.setValueAtTime(0, startTime);
       padGain.gain.linearRampToValueAtTime(level, startTime + attack);
@@ -107,26 +109,6 @@ const Audio = (() => {
       osc.stop(startTime + dur);
       scheduledOscillators.push(osc);
     });
-  }
-
-  /**
-   * Mengubah nama chord ("Dm7", "C#maj7", "Bbm7") menjadi daftar chord tone.
-   * Mem-parse root (1-2 karakter, sharp/flat) lalu tipe.
-   */
-  function chordNameToTones(chordName) {
-    if (!chordName) return [];
-    const FLAT_TO_SHARP = { 'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#' };
-
-    let root, type;
-    if (chordName.length >= 2 && (chordName[1] === '#' || chordName[1] === 'b')) {
-      root = chordName.slice(0, 2);
-      type = chordName.slice(2);
-    } else {
-      root = chordName.slice(0, 1);
-      type = chordName.slice(1);
-    }
-    root = FLAT_TO_SHARP[root] || root;
-    return Config.computeChordTones(root, type);
   }
 
   /**

@@ -1,8 +1,11 @@
 package com.jazzimprov.config;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Konfigurasi musik untuk Jazz Improv Generator.
@@ -85,6 +88,41 @@ public final class MusicConfig {
 
     /** Pengali bobot untuk transisi menuju chord tone. */
     public static final double CHORD_TONE_BONUS = 1.5;
+
+    // ====================================================================
+    // ENCLOSURE / CHROMATIC APPROACH (teori bebop)
+    // --------------------------------------------------------------------
+    // "Enclosure" (disebut juga encirclement / surround) adalah teknik
+    // bebop di mana sebuah target (umumnya chord tone) didekati dengan
+    // mengepungnya: dimainkan nada kromatik DI ATAS dan DI BAWAH target
+    // sebelum akhirnya resolve ke target. Contoh enclosure ke C:
+    //   Db (atas) → B (bawah) → C (target)
+    //   B  (bawah) → Db (atas) → C (target)
+    // Pendekatan satu sisi (chromatic approach) juga umum: B → C.
+    //
+    // Bobot di bawah dipakai graf untuk mengarahkan traversal agar:
+    // - nada kromatik selalu "ingin" resolve ke chord tone,
+    // - dua nada kromatik yang mengepung target saling terhubung kuat,
+    // - chord tone sesekali melangkah keluar ke nada kromatik (memulai
+    //   enclosure), sehingga melodi terdengar lebih jazzy.
+    // ====================================================================
+
+    /** Bobot: nada kromatik (approach) resolve setengah langkah ke chord tone. */
+    public static final double RESOLUTION_WEIGHT = 2.6;
+
+    /** Bobot: transisi antar dua nada pengepung (atas ↔ bawah) target yang sama. */
+    public static final double ENCLOSURE_WEIGHT = 1.8;
+
+    /**
+     * Bobot: chord tone melangkah keluar setengah langkah ke nada approach.
+     * Sengaja kecil — lebih rendah dari kebanyakan gerak antar chord tone —
+     * agar pemilihan greedy tetap pada chord tone (in-context); nada kromatik
+     * (enclosure) lebih banyak dipicu lewat eksplorasi randomness lalu resolve.
+     */
+    public static final double APPROACH_ENTRY_WEIGHT = 0.4;
+
+    /** Bobot: gerak kromatik biasa antar approach note (passing). */
+    public static final double CHROMATIC_PASSING_WEIGHT = 0.5;
 
     /** Jumlah default nada yang dihasilkan. */
     public static final int DEFAULT_MAX_NOTES = 32;
@@ -174,5 +212,64 @@ public final class MusicConfig {
     /** Mengecek apakah chord name valid (root kromatik + tipe didukung). */
     public static boolean isValidChord(String chordName) {
         return parseChord(chordName) != null;
+    }
+
+    /** Nada di atas (setengah langkah / +1 semitone). */
+    public static String noteAbove(String note) {
+        int idx = chromaticIndex(note);
+        return idx < 0 ? null : CHROMATIC_NOTES[(idx + 1) % 12];
+    }
+
+    /** Nada di bawah (setengah langkah / -1 semitone). */
+    public static String noteBelow(String note) {
+        int idx = chromaticIndex(note);
+        return idx < 0 ? null : CHROMATIC_NOTES[(idx + 11) % 12];
+    }
+
+    /**
+     * Mendapatkan nada-nada KROMATIK pengepung (enclosure / approach) untuk
+     * sebuah chord: setengah langkah di atas & di bawah tiap chord tone yang
+     * BUKAN merupakan chord tone itu sendiri.
+     *
+     * Contoh Cmaj7 (C,E,G,B) → approach: C#/Db, D# (bawah E), F (atas E),
+     * F#/Gb, G# (atas G)... dst. (yang belum jadi chord tone).
+     *
+     * @return daftar nada approach (urut, tanpa duplikat), atau null jika chord invalid.
+     */
+    public static List<String> getApproachNotes(String chordName) {
+        List<String> tones = getChordTones(chordName);
+        if (tones == null) return null;
+
+        Set<String> approaches = new LinkedHashSet<>();
+        for (String t : tones) {
+            String above = noteAbove(t);
+            String below = noteBelow(t);
+            if (!tones.contains(above)) approaches.add(above);
+            if (!tones.contains(below)) approaches.add(below);
+        }
+        return new ArrayList<>(approaches);
+    }
+
+    /**
+     * Mengecek apakah dua nada {@code s} dan {@code t} adalah pasangan
+     * pengepung (satu di atas, satu di bawah) dari chord tone yang sama —
+     * yaitu membentuk enclosure.
+     *
+     * @param tones daftar chord tone target
+     */
+    public static boolean isEnclosurePair(String s, String t, Collection<String> tones) {
+        int is = chromaticIndex(s);
+        int it = chromaticIndex(t);
+        if (is < 0 || it < 0) return false;
+
+        for (String u : tones) {
+            int iu = chromaticIndex(u);
+            int up = (iu + 1) % 12;    // pengepung atas
+            int down = (iu + 11) % 12; // pengepung bawah
+            if ((is == up && it == down) || (is == down && it == up)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
